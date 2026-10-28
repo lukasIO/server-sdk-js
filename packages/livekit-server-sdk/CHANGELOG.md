@@ -1,5 +1,11 @@
 # livekit-server-sdk
 
+## 2.19.3
+
+### Patch Changes
+
+- Test the verwalter release cycle on this fork.
+
 ## 2.19.2
 
 ### Patch Changes
