@@ -1,0 +1,29 @@
+# Keeps one release PR per package open while changesets are pending,
+# stacked by dependency. Regenerates the release branches on every push.
+name: Release PRs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-prs
+  cancel-in-progress: true
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # tags decide which changesets are already released
+      - uses: lukasIO/verwalter@v0.5.0
+        with:
+          command: pr
+          # A GitHub App or PAT token lets the release PRs trigger CI;
+          # the default github.token does not.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}

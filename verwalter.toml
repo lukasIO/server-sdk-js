@@ -1,0 +1,13 @@
+# Versioning: https://github.com/lukasIO/verwalter
+# Changeset files in .changeset/ drive release PRs; pnpm publish stays in release.yml.
+[packages.livekit-server-sdk]
+path = "packages/livekit-server-sdk"
+versioned_files = ["packages/livekit-server-sdk/package.json"]
+changelog = "packages/livekit-server-sdk/CHANGELOG.md"
+release = "tag_and_release"
+
+[packages."@livekit/rtc-node"]
+path = "packages/livekit-rtc"
+versioned_files = ["packages/livekit-rtc/package.json"]
+changelog = "packages/livekit-rtc/CHANGELOG.md"
+release = "tag_and_release"

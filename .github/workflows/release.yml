@@ -1,0 +1,94 @@
+# After a release PR merges: build, tag and create the GitHub release, then
+# publish to npm, dependencies first, then docs.
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  # Re-run by hand after a fix; `verwalter release` resumes from the
+  # current state. With `package`, that package is reported again even
+  # when complete, so the publish job runs for it.
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Only this package; always reported to the publish job.
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  id-token: write # npm trusted publishing
+
+env:
+  APP_NAME: rtc-node
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/'))
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.verwalter.outputs.released }}
+      releases: ${{ steps.verwalter.outputs.releases }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: verwalter
+        uses: lukasIO/verwalter@v0.5.0
+        with:
+          command: release
+          args: ${{ inputs.package && format('--package {0}', inputs.package) || '' }}
+
+  # `releases` lists dependencies before dependents. Publish one at a
+  # time and stop at the first failure.
+  publish:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: true
+      matrix:
+        release: ${{ fromJSON(needs.release.outputs.releases) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.release.tag }}
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24 # NPM v11.5.1 or later is required for OIDC, which ships with node v24
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm --filter="${{ matrix.release.package }}" build
+      # An rc must not become `latest`.
+      - name: Publish ${{ matrix.release.package }} ${{ matrix.release.version }}
+        run: pnpm --filter="${{ matrix.release.package }}" publish --access public --no-git-checks --tag ${{ matrix.release.prerelease && 'next' || 'latest' }}
+        env:
+          NPM_CONFIG_PROVENANCE: true
+
+  docs:
+    needs: [release, publish]
+    if: contains(needs.release.outputs.releases, '"livekit-server-sdk"')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm --filter=livekit-server-sdk build
+      - run: pnpm --filter=livekit-server-sdk build-docs
+      - run: aws s3 cp packages/livekit-server-sdk/docs/ s3://livekit-docs/server-sdk-js --recursive
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DOCS_DEPLOY_AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DOCS_DEPLOY_AWS_API_SECRET }}
+          AWS_DEFAULT_REGION: 'us-east-1'
