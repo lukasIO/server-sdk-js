@@ -1,5 +1,11 @@
 # Versioning: https://github.com/lukasIO/verwalter
-# Changeset files in .changeset/ drive release PRs; pnpm publish stays in release.yml.
+# Changeset files in .changeset/ drive release PRs. `verwalter publish`
+# runs the built-in command for npm in a pnpm workspace in each package:
+# pnpm publish --provenance --access public --no-git-checks, with
+# --tag next for an rc.
+[publish]
+registry = "npm"
+
 [packages.livekit-server-sdk]
 path = "packages/livekit-server-sdk"
 versioned_files = ["packages/livekit-server-sdk/package.json"]

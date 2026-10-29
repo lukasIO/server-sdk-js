@@ -1,5 +1,6 @@
-# After a release PR merges: build, tag and create the GitHub release, then
-# publish to npm, dependencies first, then docs.
+# After a release PR merges: tag and create the GitHub releases, then
+# build and publish the released packages to npm through `verwalter
+# publish`, dependencies first, then docs.
 name: Release
 
 on:
@@ -27,7 +28,9 @@ env:
 
 jobs:
   release:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/'))
+    # Only a release PR the tool opened: the branch prefix alone would let
+    # any pushed `release/*` branch trigger a publish.
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/') && github.event.pull_request.user.login == 'github-actions[bot]' && contains(github.event.pull_request.body, '<!-- verwalter release -->'))
     runs-on: ubuntu-latest
     outputs:
       released: ${{ steps.verwalter.outputs.released }}
@@ -35,41 +38,46 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          # The merge commit itself: a push to main right after the merge
+          # must not move the tags.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
       - id: verwalter
-        uses: lukasIO/verwalter@v0.11.0
+        uses: lukasIO/verwalter@v0.18.1
         with:
           command: release
           args: ${{ inputs.package && format('--package {0}', inputs.package) || '' }}
 
-  # `releases` lists dependencies before dependents. Publish one at a
-  # time and stop at the first failure.
+  # `verwalter publish` runs `pnpm publish` in each released package,
+  # dependencies first, and asks npm before and after. pnpm resolves the
+  # `workspace:*` range in the tarball from the installed workspace, so
+  # `pnpm install` runs first. An rc goes under the `next` dist-tag.
   publish:
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 1
-      fail-fast: true
-      matrix:
-        release: ${{ fromJSON(needs.release.outputs.releases) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ matrix.release.tag }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0 # tags decide what is published
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24 # NPM v11.5.1 or later is required for OIDC, which ships with node v24
           cache: pnpm
       - run: pnpm install
-      - run: pnpm --filter="${{ matrix.release.package }}" build
-      # An rc must not become `latest`.
-      - name: Publish ${{ matrix.release.package }} ${{ matrix.release.version }}
-        run: pnpm --filter="${{ matrix.release.package }}" publish --access public --no-git-checks --tag ${{ matrix.release.prerelease && 'next' || 'latest' }}
+      - name: Build the released packages
         env:
-          NPM_CONFIG_PROVENANCE: true
+          RELEASES: ${{ needs.release.outputs.releases }}
+        run: |
+          for p in $(echo "$RELEASES" | jq -r '.[].package'); do
+            pnpm --filter="$p" build
+          done
+      - uses: lukasIO/verwalter@v0.18.1
+        with:
+          command: publish
+          releases: ${{ needs.release.outputs.releases }}
 
   docs:
     needs: [release, publish]
