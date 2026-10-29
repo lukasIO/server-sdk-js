@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # tags decide which changesets are already released
-      - uses: lukasIO/verwalter@v0.7.0
+      - uses: lukasIO/verwalter@v0.8.0
         with:
           command: pr
           # A GitHub App or PAT token lets the release PRs trigger CI;
