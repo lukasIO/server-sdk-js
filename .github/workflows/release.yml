@@ -43,7 +43,7 @@ jobs:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
       - id: verwalter
-        uses: lukasIO/verwalter@v0.18.1
+        uses: lukasIO/verwalter@v0.19.0
         with:
           command: release
           args: ${{ inputs.package && format('--package {0}', inputs.package) || '' }}
@@ -74,7 +74,7 @@ jobs:
           for p in $(echo "$RELEASES" | jq -r '.[].package'); do
             pnpm --filter="$p" build
           done
-      - uses: lukasIO/verwalter@v0.18.1
+      - uses: lukasIO/verwalter@v0.19.0
         with:
           command: publish
           releases: ${{ needs.release.outputs.releases }}

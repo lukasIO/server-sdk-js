@@ -8,12 +8,12 @@ registry = "npm"
 
 [packages.livekit-server-sdk]
 path = "packages/livekit-server-sdk"
-versioned_files = ["packages/livekit-server-sdk/package.json"]
-changelog = "packages/livekit-server-sdk/CHANGELOG.md"
+versioned_files = ["package.json"]
+changelog = "CHANGELOG.md"
 release = "tag_and_release"
 
 [packages."@livekit/rtc-node"]
 path = "packages/livekit-rtc"
-versioned_files = ["packages/livekit-rtc/package.json"]
-changelog = "packages/livekit-rtc/CHANGELOG.md"
+versioned_files = ["package.json"]
+changelog = "CHANGELOG.md"
 release = "tag_and_release"
